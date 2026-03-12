@@ -55,18 +55,8 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 # -----------------------------
 # -----------------------------
 # Tkinter root for popup
-# -----------------------------
 root = tk.Tk()
 root.withdraw()  # hide main tkinter window
-
-test_window = tk.Toplevel(root)
-test_window.title("App Started")
-test_window.geometry("300x120")
-label = tk.Label(test_window, text="Eye Break Reminder started", font=("Arial", 14))
-label.pack(expand=True)
-test_window.update()
-time.sleep(2)
-test_window.destroy()
 
 
 def show_break_overlay():
