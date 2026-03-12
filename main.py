@@ -1,3 +1,5 @@
+import os
+import sys
 import cv2
 import time
 import tkinter as tk
@@ -22,7 +24,12 @@ FaceDetector = vision.FaceDetector
 FaceDetectorOptions = vision.FaceDetectorOptions
 VisionRunningMode = vision.RunningMode
 
-MODEL_PATH = "models/blaze_face_short_range.tflite"
+if getattr(sys, "frozen", False):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+MODEL_PATH = os.path.join(BASE_DIR, "models", "blaze_face_short_range.tflite")
 
 options = FaceDetectorOptions(
     base_options=BaseOptions(model_asset_path=MODEL_PATH),
@@ -46,8 +53,20 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 # -----------------------------
 # Tkinter root for popup
 # -----------------------------
+# -----------------------------
+# Tkinter root for popup
+# -----------------------------
 root = tk.Tk()
 root.withdraw()  # hide main tkinter window
+
+test_window = tk.Toplevel(root)
+test_window.title("App Started")
+test_window.geometry("300x120")
+label = tk.Label(test_window, text="Eye Break Reminder started", font=("Arial", 14))
+label.pack(expand=True)
+test_window.update()
+time.sleep(2)
+test_window.destroy()
 
 
 def show_break_overlay():
