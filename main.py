@@ -1,7 +1,7 @@
 import cv2
 import time
 import tkinter as tk
-from tkinter import messagebox
+
 
 # -----------------------------
 # Settings
@@ -30,6 +30,60 @@ if not cap.isOpened():
 # -----------------------------
 root = tk.Tk()
 root.withdraw()  # hide main tkinter window
+
+def show_break_overlay():
+    overlay = tk.Toplevel()
+    overlay.title("Eye Break Reminder")
+    overlay.configure(bg="red")
+    overlay.attributes("-topmost", True)
+
+    screen_width = overlay.winfo_screenwidth()
+    screen_height = overlay.winfo_screenheight()
+
+    width = int(screen_width * 0.7)
+    height = int(screen_height * 0.4)
+
+    x = (screen_width - width) // 2
+    y = (screen_height - height) // 2
+
+    overlay.geometry(f"{width}x{height}+{x}+{y}")
+    overlay.resizable(False, False)
+
+    title_label = tk.Label(
+        overlay,
+        text="TIME TO REST YOUR EYES",
+        font=("Arial", 28, "bold"),
+        bg="red",
+        fg="white"
+    )
+    title_label.pack(pady=30)
+
+    message_label = tk.Label(
+        overlay,
+        text="Look away from the screen",
+        font=("Arial", 20),
+        bg="red",
+        fg="white"
+    )
+    message_label.pack(pady=10)
+
+    countdown_label = tk.Label(
+        overlay,
+        text="",
+        font=("Arial", 40, "bold"),
+        bg="red",
+        fg="yellow"
+    )
+    countdown_label.pack(pady=20)
+
+    overlay.update()
+
+    for remaining in range(BREAK_TIME_SECONDS, 0, -1):
+        countdown_label.config(text=f"{remaining} seconds")
+        overlay.update()
+        time.sleep(1)
+
+    overlay.destroy()
 
 # -----------------------------
 # Timer state
@@ -72,30 +126,11 @@ while True:
         for (x, y, w, h) in faces:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        # Show popup after 20 minutes
-        if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
-            alert_shown = True
-            messagebox.showwarning(
-                "Eye Break Reminder",
-                "20 minutes completed.\nLook away from the screen for 20 seconds."
-            )
+        # Show popup after work time is completed
+            if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
+             alert_shown = True
 
-            # Break countdown
-            break_start = time.time()
-            while time.time() - break_start < BREAK_TIME_SECONDS:
-                break_remaining = int(BREAK_TIME_SECONDS - (time.time() - break_start))
-                temp_frame = frame.copy()
-                cv2.putText(
-                    temp_frame,
-                    f"BREAK: {break_remaining}s",
-                    (20, 80),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 0, 255),
-                    2
-                )
-                cv2.imshow("Eye Break Reminder", temp_frame)
-                cv2.waitKey(1)
+             show_break_overlay()
 
             # Reset timer after break
             face_present_start = None
