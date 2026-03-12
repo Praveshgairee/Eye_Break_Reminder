@@ -12,6 +12,7 @@ from mediapipe.tasks.python import vision
 WORK_TIME_SECONDS = 20   # use 20 * 60 for real use
 BREAK_TIME_SECONDS = 5   # use 20 for real use
 FACE_TIMEOUT_SECONDS = 2  # allow short face-detection misses
+PROCESS_EVERY_N_FRAMES = 3  # reduce CPU usage a bit
 
 # -----------------------------
 # MediaPipe face detector setup
@@ -37,6 +38,10 @@ cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
 if not cap.isOpened():
     print("Error: Could not open camera.")
     exit()
+
+# Lower resolution to reduce CPU / battery usage
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 # -----------------------------
 # Tkinter root for popup
@@ -106,90 +111,84 @@ def show_break_overlay():
 face_present_start = None
 last_face_seen_time = None
 alert_shown = False
+frame_count = 0
+last_display_value = None
 
-print("Eye break reminder started.")
-print("Press q to quit.")
+print("Eye break reminder started in background mode.")
+print("Camera preview is hidden.")
+print("Press Ctrl + C in Terminal to stop.")
 
 with FaceDetector.create_from_options(options) as detector:
-    while True:
-        ret, frame = cap.read()
+    try:
+        while True:
+            ret, frame = cap.read()
 
-        if not ret:
-            print("Error: Could not read frame.")
-            break
+            if not ret:
+                print("\nError: Could not read frame.")
+                break
 
-        current_time = time.time()
+            current_time = time.time()
+            frame_count += 1
+            detections = []
 
-        # Convert BGR (OpenCV) to RGB (MediaPipe)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+            # Run detection every few frames to save CPU
+            if frame_count % PROCESS_EVERY_N_FRAMES == 0:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        timestamp_ms = int(current_time * 1000)
-        result = detector.detect_for_video(mp_image, timestamp_ms)
-        detections = result.detections if result.detections else []
+                timestamp_ms = int(current_time * 1000)
+                result = detector.detect_for_video(mp_image, timestamp_ms)
+                detections = result.detections if result.detections else []
 
-        if len(detections) > 0:
-            # Mark the latest time a face was seen
-            last_face_seen_time = current_time
+                if len(detections) > 0:
+                    last_face_seen_time = current_time
 
-            # Start timing only once, when face first appears
-            if face_present_start is None:
-                face_present_start = current_time
+                    if face_present_start is None:
+                        face_present_start = current_time
 
-            elapsed_time = int(current_time - face_present_start)
-            remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
-
-            status = f"Face detected | Break in: {remaining_time}s"
-
-            # Draw face rectangles
-            for detection in detections:
-                bbox = detection.bounding_box
-                x = bbox.origin_x
-                y = bbox.origin_y
-                w = bbox.width
-                h = bbox.height
-
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-            # Show popup after work time is completed
-            if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
-                alert_shown = True
-
-                show_break_overlay()
-
-                # Reset timer after break
-                face_present_start = None
-                last_face_seen_time = None
-                alert_shown = False
-
-        else:
-            # Do not reset immediately; allow short misses
+            # Timing logic
             if last_face_seen_time is not None and (current_time - last_face_seen_time) < FACE_TIMEOUT_SECONDS:
                 elapsed_time = int(current_time - face_present_start) if face_present_start is not None else 0
                 remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
-                status = f"Face temporarily lost | Break in: {remaining_time}s"
+
+                # Show only milestone values in same terminal line
+                if remaining_time > 15:
+                    display_value = 20
+                elif remaining_time > 10:
+                    display_value = 15
+                elif remaining_time > 5:
+                    display_value = 10
+                elif remaining_time > 0:
+                    display_value = 5
+                else:
+                    display_value = 0
+
+                if display_value != last_display_value:
+                    print(f"\rBreak in: {display_value}s   ", end="", flush=True)
+                    last_display_value = display_value
+
+                if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
+                    alert_shown = True
+                    print("\rBreak in: 0s   ", end="", flush=True)
+
+                    show_break_overlay()
+
+                    # Reset after break
+                    face_present_start = None
+                    last_face_seen_time = None
+                    alert_shown = False
+                    last_display_value = None
+
             else:
-                status = "No face detected"
                 face_present_start = None
                 last_face_seen_time = None
                 alert_shown = False
+                last_display_value = None
 
-        # Show status text
-        cv2.putText(
-            frame,
-            status,
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 0, 255),
-            2
-        )
+            root.update()
 
-        cv2.imshow("Eye Break Reminder", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    except KeyboardInterrupt:
+        print("\nStopped by user.")
 
 cap.release()
-cv2.destroyAllWindows()
 root.destroy()
