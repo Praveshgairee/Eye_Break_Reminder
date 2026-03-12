@@ -186,25 +186,18 @@ with FaceDetector.create_from_options(options) as detector:
                 elapsed_time = int(current_time - face_present_start) if face_present_start is not None else 0
                 remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
 
-                # Show only milestone values in same terminal line
-                if remaining_time > 15:
-                    display_value = 20
-                elif remaining_time > 10:
-                    display_value = 15
-                elif remaining_time > 5:
-                    display_value = 10
-                elif remaining_time > 0:
-                    display_value = 5
-                else:
-                    display_value = 0
+                # Show real remaining time in MM:SS format in same terminal line
+                minutes = remaining_time // 60
+                seconds = remaining_time % 60
+                display_value = f"{minutes:02d}:{seconds:02d}"
 
                 if display_value != last_display_value:
-                    print(f"\rBreak in: {display_value}s   ", end="", flush=True)
+                    print(f"\rBreak in: {display_value}   ", end="", flush=True)
                     last_display_value = display_value
 
                 if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
                     alert_shown = True
-                    print("\rBreak in: 0s   ", end="", flush=True)
+                    print("\rBreak in: 00:00   ", end="", flush=True)
 
                     show_break_overlay()
 
