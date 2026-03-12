@@ -9,9 +9,9 @@ from mediapipe.tasks.python import vision
 # -----------------------------
 # Settings
 # -----------------------------
-WORK_TIME_SECONDS = 20   # use 20 * 60 for real use
-BREAK_TIME_SECONDS = 5   # use 20 for real use
-FACE_TIMEOUT_SECONDS = 2  # allow short face-detection misses
+WORK_TIME_SECONDS = 20 * 60   # use 20 * 60 for real use
+BREAK_TIME_SECONDS = 20   # use 20 for real use
+FACE_TIMEOUT_SECONDS = 3  # allow short face-detection misses
 PROCESS_EVERY_N_FRAMES = 3  # reduce CPU usage a bit
 
 # -----------------------------
