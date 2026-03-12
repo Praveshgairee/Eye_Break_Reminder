@@ -1,20 +1,32 @@
 import cv2
 import time
 import tkinter as tk
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 
 
 # -----------------------------
 # Settings
 # -----------------------------
-WORK_TIME_SECONDS = 20   # 20 * 60 for real use
-BREAK_TIME_SECONDS = 5  # 20 for real use
+WORK_TIME_SECONDS = 20   # use 20 * 60 for real use
+BREAK_TIME_SECONDS = 5   # use 20 for real use
 FACE_TIMEOUT_SECONDS = 2  # allow short face-detection misses
 
 # -----------------------------
-# Load face detector
+# MediaPipe face detector setup
 # -----------------------------
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+BaseOptions = mp.tasks.BaseOptions
+FaceDetector = vision.FaceDetector
+FaceDetectorOptions = vision.FaceDetectorOptions
+VisionRunningMode = vision.RunningMode
+
+MODEL_PATH = "models/blaze_face_short_range.tflite"
+
+options = FaceDetectorOptions(
+    base_options=BaseOptions(model_asset_path=MODEL_PATH),
+    running_mode=VisionRunningMode.VIDEO,
+    min_detection_confidence=0.5,
 )
 
 # -----------------------------
@@ -98,79 +110,85 @@ alert_shown = False
 print("Eye break reminder started.")
 print("Press q to quit.")
 
-while True:
-    ret, frame = cap.read()
+with FaceDetector.create_from_options(options) as detector:
+    while True:
+        ret, frame = cap.read()
 
-    if not ret:
-        print("Error: Could not read frame.")
-        break
+        if not ret:
+            print("Error: Could not read frame.")
+            break
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        current_time = time.time()
 
-    faces = face_cascade.detectMultiScale(
-        gray,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(80, 80)
-    )
+        # Convert BGR (OpenCV) to RGB (MediaPipe)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-    current_time = time.time()
+        timestamp_ms = int(current_time * 1000)
+        result = detector.detect_for_video(mp_image, timestamp_ms)
+        detections = result.detections if result.detections else []
 
-    if len(faces) > 0:
-        # Mark the latest time a face was seen
-        last_face_seen_time = current_time
+        if len(detections) > 0:
+            # Mark the latest time a face was seen
+            last_face_seen_time = current_time
 
-        # Start timing only once, when face first appears
-        if face_present_start is None:
-            face_present_start = current_time
+            # Start timing only once, when face first appears
+            if face_present_start is None:
+                face_present_start = current_time
 
-        elapsed_time = int(current_time - face_present_start)
-        remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
-
-        status = f"Face detected | Break in: {remaining_time}s"
-
-        # Draw face rectangles
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-        # Show popup after work time is completed
-        if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
-            alert_shown = True
-
-            show_break_overlay()
-
-            # Reset timer after break
-            face_present_start = None
-            last_face_seen_time = None
-            alert_shown = False
-
-    else:
-        # Do not reset immediately; allow short misses
-        if last_face_seen_time is not None and (current_time - last_face_seen_time) < FACE_TIMEOUT_SECONDS:
-            elapsed_time = int(current_time - face_present_start) if face_present_start is not None else 0
+            elapsed_time = int(current_time - face_present_start)
             remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
-            status = f"Face temporarily lost | Break in: {remaining_time}s"
+
+            status = f"Face detected | Break in: {remaining_time}s"
+
+            # Draw face rectangles
+            for detection in detections:
+                bbox = detection.bounding_box
+                x = bbox.origin_x
+                y = bbox.origin_y
+                w = bbox.width
+                h = bbox.height
+
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            # Show popup after work time is completed
+            if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
+                alert_shown = True
+
+                show_break_overlay()
+
+                # Reset timer after break
+                face_present_start = None
+                last_face_seen_time = None
+                alert_shown = False
+
         else:
-            status = "No face detected"
-            face_present_start = None
-            last_face_seen_time = None
-            alert_shown = False
+            # Do not reset immediately; allow short misses
+            if last_face_seen_time is not None and (current_time - last_face_seen_time) < FACE_TIMEOUT_SECONDS:
+                elapsed_time = int(current_time - face_present_start) if face_present_start is not None else 0
+                remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
+                status = f"Face temporarily lost | Break in: {remaining_time}s"
+            else:
+                status = "No face detected"
+                face_present_start = None
+                last_face_seen_time = None
+                alert_shown = False
 
-    # Show status text
-    cv2.putText(
-        frame,
-        status,
-        (20, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (0, 0, 255),
-        2
-    )
+        # Show status text
+        cv2.putText(
+            frame,
+            status,
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 0, 255),
+            2
+        )
 
-    cv2.imshow("Eye Break Reminder", frame)
+        cv2.imshow("Eye Break Reminder", frame)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
 cap.release()
 cv2.destroyAllWindows()
