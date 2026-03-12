@@ -12,9 +12,12 @@ from mediapipe.tasks.python import vision
 # Settings
 # -----------------------------
 WORK_TIME_SECONDS = 20 * 60   # use 20 * 60 for real use
-BREAK_TIME_SECONDS = 20   # use 20 for real use
-FACE_TIMEOUT_SECONDS = 3  # allow short face-detection misses
-PROCESS_EVERY_N_FRAMES = 3  # reduce CPU usage a bit
+BREAK_TIME_SECONDS = 20       # use 20 for real use
+FACE_TIMEOUT_SECONDS = 3      # allow short face-detection misses
+
+# Detection frequency
+PROCESS_EVERY_N_FRAMES_PRESENT = 5
+PROCESS_EVERY_N_FRAMES_ABSENT = 12
 
 # -----------------------------
 # MediaPipe face detector setup
@@ -47,14 +50,12 @@ if not cap.isOpened():
     exit()
 
 # Lower resolution to reduce CPU / battery usage
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
 # -----------------------------
 # Tkinter root for popup
 # -----------------------------
-# -----------------------------
-# Tkinter root for popup
 root = tk.Tk()
 root.withdraw()  # hide main tkinter window
 
@@ -154,8 +155,19 @@ with FaceDetector.create_from_options(options) as detector:
             frame_count += 1
             detections = []
 
-            # Run detection every few frames to save CPU
-            if frame_count % PROCESS_EVERY_N_FRAMES == 0:
+            # Choose detection frequency based on whether a face was recently seen
+            recently_seen = (
+                last_face_seen_time is not None
+                and (current_time - last_face_seen_time) < FACE_TIMEOUT_SECONDS
+            )
+
+            if recently_seen:
+                process_every_n_frames = PROCESS_EVERY_N_FRAMES_PRESENT
+            else:
+                process_every_n_frames = PROCESS_EVERY_N_FRAMES_ABSENT
+
+            # Run detection only at selected intervals
+            if frame_count % process_every_n_frames == 0:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
