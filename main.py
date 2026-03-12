@@ -56,6 +56,9 @@ def show_break_overlay():
     overlay.configure(bg="red")
     overlay.attributes("-topmost", True)
 
+    # Prevent closing during countdown
+    overlay.protocol("WM_DELETE_WINDOW", lambda: None)
+
     screen_width = overlay.winfo_screenwidth()
     screen_height = overlay.winfo_screenheight()
 
@@ -95,14 +98,25 @@ def show_break_overlay():
     )
     countdown_label.pack(pady=20)
 
-    overlay.update()
+    overlay.update_idletasks()
 
     for remaining in range(BREAK_TIME_SECONDS, 0, -1):
-        countdown_label.config(text=f"{remaining} seconds")
-        overlay.update()
+        if not overlay.winfo_exists():
+            break
+
+        try:
+            countdown_label.config(text=f"{remaining} seconds")
+            overlay.update()
+        except tk.TclError:
+            break
+
         time.sleep(1)
 
-    overlay.destroy()
+    if overlay.winfo_exists():
+        try:
+            overlay.destroy()
+        except tk.TclError:
+            pass
 
 
 # -----------------------------
