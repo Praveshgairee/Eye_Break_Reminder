@@ -6,8 +6,9 @@ import tkinter as tk
 # -----------------------------
 # Settings
 # -----------------------------
-WORK_TIME_SECONDS = 60   # 20 minutes, 60 sec for test
-BREAK_TIME_SECONDS = 10       # 20 seconds 10 sec for test
+WORK_TIME_SECONDS = 20   # 20 * 60 for real use
+BREAK_TIME_SECONDS = 5  # 20 for real use
+FACE_TIMEOUT_SECONDS = 2  # allow short face-detection misses
 
 # -----------------------------
 # Load face detector
@@ -30,6 +31,7 @@ if not cap.isOpened():
 # -----------------------------
 root = tk.Tk()
 root.withdraw()  # hide main tkinter window
+
 
 def show_break_overlay():
     overlay = tk.Toplevel()
@@ -85,10 +87,12 @@ def show_break_overlay():
 
     overlay.destroy()
 
+
 # -----------------------------
 # Timer state
 # -----------------------------
 face_present_start = None
+last_face_seen_time = None
 alert_shown = False
 
 print("Eye break reminder started.")
@@ -113,7 +117,10 @@ while True:
     current_time = time.time()
 
     if len(faces) > 0:
-        # Start timing only when face is first detected
+        # Mark the latest time a face was seen
+        last_face_seen_time = current_time
+
+        # Start timing only once, when face first appears
         if face_present_start is None:
             face_present_start = current_time
 
@@ -127,19 +134,27 @@ while True:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         # Show popup after work time is completed
-            if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
-             alert_shown = True
+        if elapsed_time >= WORK_TIME_SECONDS and not alert_shown:
+            alert_shown = True
 
-             show_break_overlay()
+            show_break_overlay()
 
             # Reset timer after break
             face_present_start = None
+            last_face_seen_time = None
             alert_shown = False
 
     else:
-        status = "No face detected"
-        face_present_start = None
-        alert_shown = False
+        # Do not reset immediately; allow short misses
+        if last_face_seen_time is not None and (current_time - last_face_seen_time) < FACE_TIMEOUT_SECONDS:
+            elapsed_time = int(current_time - face_present_start) if face_present_start is not None else 0
+            remaining_time = max(0, WORK_TIME_SECONDS - elapsed_time)
+            status = f"Face temporarily lost | Break in: {remaining_time}s"
+        else:
+            status = "No face detected"
+            face_present_start = None
+            last_face_seen_time = None
+            alert_shown = False
 
     # Show status text
     cv2.putText(
